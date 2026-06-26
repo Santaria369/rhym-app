@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Рифма Есть!</title>
+    <style>
+        /* ===== Стили (дизайн) ===== */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            padding: 20px;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 40px 35px;
+            border-radius: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            width: 100%;
+            max-width: 650px;
+            text-align: center;
+        }
+        h1 {
+            font-size: 2.8em;
+            margin-bottom: 5px;
+            letter-spacing: 1px;
+        }
+        h1 span {
+            background: linear-gradient(135deg, #f093fb, #f5576c);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .subtitle {
+            color: #666;
+            font-size: 1em;
+            margin-bottom: 25px;
+            font-style: italic;
+        }
+        .search-area {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        input {
+            flex: 2;
+            min-width: 200px;
+            padding: 15px 20px;
+            border: 2px solid #ddd;
+            border-radius: 50px;
+            font-size: 16px;
+            outline: none;
+            transition: border 0.3s;
+        }
+        input:focus { border-color: #f5576c; }
+        button {
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            border: none;
+            border-radius: 50px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            white-space: nowrap;
+        }
+        button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 10px 20px rgba(245,87,108,0.4);
+        }
+        .action-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .action-buttons button {
+            background: #28a745;
+            padding: 10px 25px;
+            font-size: 14px;
+            flex: 1 1 auto;
+        }
+        .action-buttons button#clearBtn { background: #6c757d; }
+        #result {
+            margin-top: 25px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 20px;
+            min-height: 70px;
+            font-size: 17px;
+            line-height: 1.7;
+            color: #333;
+            border: 1px solid #e9ecef;
+            word-wrap: break-word;
+            text-align: left;
+        }
+        .count-badge {
+            display: inline-block;
+            background: #f5576c;
+            color: white;
+            padding: 2px 14px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+        .error { color: #dc3545; }
+        .loading { color: #f5576c; }
+        @media (max-width: 500px) {
+            .container { padding: 20px; }
+            input { min-width: 150px; flex: 1 1 100%; }
+            button { flex: 1 1 100%; }
+            h1 { font-size: 2.2em; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📝 <span>Рифма Есть!</span></h1>
+        <p class="subtitle">Найди рифму к любому слову на русском</p>
+
+        <div class="search-area">
+            <input type="text" id="wordInput" placeholder="Например: любовь" autofocus>
+            <button id="searchBtn">Найти рифмы</button>
+        </div>
+
+        <div class="action-buttons">
+            <button id="copyBtn">📋 Копировать рифмы</button>
+            <button id="clearBtn">🧹 Очистить</button>
+        </div>
+
+        <div id="result">✨ Введите слово и нажмите «Найти рифмы»</div>
+    </div>
+
+    <script>
+        // ============================================================
+        //  БЛОК РАБОТЫ С API DATAMUSE
+        //  Документация: https://www.datamuse.com/api/
+        // ============================================================
+
+        // --- Получение ссылок на элементы страницы ---
+        const wordInput = document.getElementById('wordInput');
+        const searchBtn = document.getElementById('searchBtn');
+        const copyBtn = document.getElementById('copyBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const resultDiv = document.getElementById('result');
+
+        // --- Основная функция поиска рифм ---
+        async function findRhyme() {
+            // 1. Берём слово из поля ввода и очищаем от пробелов
+            const word = wordInput.value.trim();
+
+            // Проверка, что слово не пустое
+            if (!word) {
+                resultDiv.innerHTML = '⚠️ Пожалуйста, введите слово.';
+                resultDiv.className = '';
+                return;
+            }
+
+            // 2. Показываем индикатор загрузки
+            resultDiv.innerHTML = '🔍 Ищем рифмы...';
+            resultDiv.className = 'loading';
+
+            try {
+                // =========================================================
+                //  ЗАПРОС К API DATAMUSE
+                //  Мы используем параметр rel_rhy — поиск рифм
+                //  Параметр max=30 — максимум результатов
+                //  encodeURIComponent — экранирует спецсимволы в слове
+                // =========================================================
+                const apiUrl = `https://rhymebrain.com/talk?function=getRhymes&word=${encodeURIComponent(word)}&lang=ru&maxResults=30`;
+                
+                // Отправляем GET-запрос
+                const response = await fetch(apiUrl);
+
+                // Проверяем, что сервер ответил успешно (код 200)
+                if (!response.ok) {
+                    throw new Error(`Ошибка сервера: ${response.status}`);
+                }
+
+                // Преобразуем ответ в формат JSON (массив объектов)
+                const data = await response.json();
+
+                // Если массив пустой — рифм нет
+                if (data.length === 0) {
+                    resultDiv.innerHTML = '😕 Рифм не найдено. Попробуйте другое слово.';
+                    resultDiv.className = '';
+                    return;
+                }
+
+                // Извлекаем из каждого объекта поле word (саму рифму)
+                const rhymeWords = data.map(item => item.word);
+                const count = rhymeWords.length;
+                const rhymesText = rhymeWords.join(', ');
+
+                // Выводим результат с количеством
+                resultDiv.innerHTML = `<div class="count-badge">Найдено: ${count}</div> ${rhymesText}`;
+                resultDiv.className = '';
+
+            } catch (error) {
+                // Если произошла ошибка (нет интернета, сервер недоступен и т.д.)
+                console.error('Ошибка при запросе к API Datamuse:', error);
+                resultDiv.innerHTML = `❌ Произошла ошибка при поиске. Проверьте интернет-соединение.<br><small>${error.message}</small>`;
+                resultDiv.className = 'error';
+            }
+        }
+
+        // --- Копирование результата в буфер обмена ---
+        function copyResult() {
+            const text = resultDiv.innerText
+                .replace(/Найдено: \d+/, '')   // убираем счётчик
+                .trim();
+
+            if (!text || text === '✨ Введите слово и нажмите «Найти рифмы»' 
+                || text.includes('не найдено') || text.includes('Ошибка')) {
+                alert('Сначала найдите рифмы, чтобы скопировать.');
+                return;
+            }
+
+            // Используем современный Clipboard API
+            navigator.clipboard.writeText(text)
+                .then(() => alert('✅ Рифмы скопированы в буфер обмена!'))
+                .catch(() => {
+                    // Резервный способ для старых браузеров
+                    const temp = document.createElement('textarea');
+                    temp.value = text;
+                    document.body.appendChild(temp);
+                    temp.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(temp);
+                    alert('✅ Рифмы скопированы (старый способ).');
+                });
+        }
+
+        // --- Очистка ---
+        function clearAll() {
+            wordInput.value = '';
+            resultDiv.innerHTML = '✨ Введите слово и нажмите «Найти рифмы»';
+            resultDiv.className = '';
+            wordInput.focus();
+        }
+
+        // --- Привязываем события к кнопкам и полю ввода ---
+        searchBtn.addEventListener('click', findRhyme);
+        wordInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') findRhyme();
+        });
+        copyBtn.addEventListener('click', copyResult);
+        clearBtn.addEventListener('click', clearAll);
+        window.addEventListener('load', () => wordInput.focus());
+
+        console.log('✅ Приложение "Рифма Есть!" использует API Datamuse (https://www.datamuse.com/api/)');
+    </script>
+</body>
+</html>
